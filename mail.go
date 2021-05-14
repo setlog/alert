@@ -4,6 +4,7 @@ package alert
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -46,13 +47,32 @@ func sendMail(m *mail, recipient, sender string) (retErr error) {
 		return fmt.Errorf("could not get StdinPipe: %w", err)
 	}
 	defer stdin.Close()
+	stdout, err := sendmail.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("could not get StdoutPipe: %w", err)
+	}
+	defer stdout.Close()
 	err = sendmail.Start()
 	if err != nil {
 		return fmt.Errorf("could not start /usr/sbin/sendmail: %w", err)
 	}
 	defer func() {
-		if err = sendmail.Wait(); err != nil && retErr == nil {
+		output, stdoutErr := ioutil.ReadAll(stdout)
+		err = sendmail.Wait()
+		if retErr != nil {
+			return
+		}
+		if err != nil {
 			retErr = fmt.Errorf("could not wait for process /usr/sbin/sendmail to finish: %w", err)
+			return
+		}
+		if !sendmail.ProcessState.Success() {
+			if stdoutErr == nil {
+				retErr = fmt.Errorf("sendmail failed with exit code %d: %v", sendmail.ProcessState.ExitCode(), string(output))
+			} else {
+				retErr = fmt.Errorf("sendmail failed with exit code %d; also couldn't read its stdout: %v", sendmail.ProcessState.ExitCode(), stdoutErr)
+			}
+			return
 		}
 	}()
 	if _, err = stdin.Write([]byte("Subject: " + m.title + "\n\n" + m.message)); err != nil {
