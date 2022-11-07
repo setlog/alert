@@ -41,7 +41,7 @@ func Mail(title string, format string, args ...interface{}) {
 }
 
 func sendMail(m *mail, recipient, sender string) (retErr error) {
-	sendmail := exec.Command("/usr/sbin/sendmail", "-f", sender, recipient)
+	sendmail := exec.Command("/usr/sbin/sendmail", "-t", recipient)
 	stdin, err := sendmail.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("could not get StdinPipe: %w", err)
@@ -75,7 +75,7 @@ func sendMail(m *mail, recipient, sender string) (retErr error) {
 			return
 		}
 	}()
-	if _, err = stdin.Write([]byte("Subject: " + m.title + "\n\n" + m.message)); err != nil {
+	if _, err = stdin.Write([]byte("Subject: " + m.title + "\nFrom: " + sender + "\n\n\n" + m.message)); err != nil {
 		return fmt.Errorf("could not write in stdin of /usr/sbin/sendmail: %w", err)
 	}
 	if err = stdin.Close(); err != nil {
